@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,10 +36,20 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.Pending
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Savings
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VolunteerActivism
 import androidx.compose.material3.Button
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.example.data.model.ExtraCollection
+import com.example.data.model.PaymentRecord
+import com.example.data.model.TransferRecord
+import com.example.ui.components.CollectorDetailsDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -83,6 +95,8 @@ import com.example.ui.viewmodel.TssUiState
 @Composable
 fun DashboardScreen(
     uiState: TssUiState,
+    transfers: List<TransferRecord> = emptyList(),
+    extraCollections: List<ExtraCollection> = emptyList(),
     onOpenSheetDialog: () -> Unit,
     onExportCsv: () -> Unit,
     onInitiateTransfer: (holder: String, currency: String, amount: Double) -> Unit,
@@ -92,6 +106,7 @@ fun DashboardScreen(
 ) {
     val monthName = MONTHS.getOrElse(uiState.selectedMonthIndex) { "NOV" }
     val cur = uiState.selectedCurrency
+    var selectedCollectorDetails by remember { mutableStateOf<String?>(null) }
 
     LazyColumn(
         modifier = modifier
@@ -115,6 +130,9 @@ fun DashboardScreen(
                 inrBalance = uiState.inrBalance,
                 onQuickTransfer = { holder, c, amt ->
                     onInitiateTransfer(holder, c, amt)
+                },
+                onOpenCollectorDetails = { collector ->
+                    selectedCollectorDetails = collector
                 },
                 modifier = Modifier.testTag("card_grand_treasury")
             )
@@ -148,8 +166,12 @@ fun DashboardScreen(
             EnhancedCashWithOthersCard(
                 currency = cur,
                 holders = holders,
+                allPayments = uiState.allPayments,
                 onTransferClick = { holder, amount ->
                     onInitiateTransfer(holder, cur, amount)
+                },
+                onViewCollectorDetails = { collector ->
+                    selectedCollectorDetails = collector
                 },
                 modifier = Modifier.testTag("card_cash_with_others")
             )
@@ -168,6 +190,27 @@ fun DashboardScreen(
         item {
             Spacer(modifier = Modifier.height(20.dp))
         }
+    }
+
+    if (selectedCollectorDetails != null) {
+        val curHolders = if (cur == "AED") uiState.aedBalance.holders else uiState.inrBalance.holders
+        val allMembersList = remember(uiState.membersWithStatus) {
+            uiState.membersWithStatus.map { it.member }
+        }
+        CollectorDetailsDialog(
+            currency = cur,
+            holders = curHolders,
+            allMembers = allMembersList,
+            allPayments = uiState.allPayments,
+            allExtras = extraCollections,
+            allTransfers = transfers,
+            initialSelectedCollector = if (selectedCollectorDetails == "ALL") null else selectedCollectorDetails,
+            onDismiss = { selectedCollectorDetails = null },
+            onInitiateTransfer = { collector, c, amt ->
+                onInitiateTransfer(collector, c, amt)
+                selectedCollectorDetails = null
+            }
+        )
     }
 }
 
@@ -272,6 +315,7 @@ fun GrandTreasuryCard(
     aedBalance: CurrencyBalance,
     inrBalance: CurrencyBalance,
     onQuickTransfer: (String, String, Double) -> Unit,
+    onOpenCollectorDetails: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val activeBalance = if (currency == "AED") aedBalance else inrBalance
@@ -367,73 +411,137 @@ fun GrandTreasuryCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Two Split Glassmorphic Cards (Main Account vs Cash with Others)
+            // Two Split Glassmorphic Cards (Main Account vs Cash with Collectors - Equal Dimensions)
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Max),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Main Account
+                // Main Account Column
                 Surface(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
                     shape = RoundedCornerShape(14.dp),
                     color = Color.White.copy(alpha = 0.08f),
                     border = CardDefaults.outlinedCardBorder()
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.AccountBalance,
-                                contentDescription = null,
-                                tint = MintAccent,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.AccountBalance,
+                                        contentDescription = null,
+                                        tint = MintAccent,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Main Vault",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White.copy(alpha = 0.85f)
+                                    )
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MintAccent.copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = "Direct",
+                                        fontSize = 9.sp,
+                                        color = MintAccent,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Main Vault",
-                                fontSize = 11.sp,
-                                color = Color.White.copy(alpha = 0.8f)
+                                text = formatCurrency(currency, activeBalance.mainAccount),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
                             )
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = formatCurrency(currency, activeBalance.mainAccount),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            text = "Secured in treasury",
+                            fontSize = 9.sp,
+                            color = Color.White.copy(alpha = 0.65f)
                         )
                     }
                 }
 
-                // Cash with Others
+                // Cash with Others / With Collectors Column
                 Surface(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable { onOpenCollectorDetails("ALL") }
+                        .testTag("card_treasury_with_collectors"),
                     shape = RoundedCornerShape(14.dp),
-                    color = if (activeBalance.cashWithOthers > 0) GoldAccent.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.08f),
+                    color = if (activeBalance.cashWithOthers > 0) GoldAccent.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.08f),
                     border = CardDefaults.outlinedCardBorder().copy(
-                        brush = if (activeBalance.cashWithOthers > 0) Brush.horizontalGradient(listOf(GoldAccent.copy(alpha = 0.4f), GoldAccent)) else Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.1f), Color.White.copy(alpha = 0.1f)))
+                        brush = if (activeBalance.cashWithOthers > 0) Brush.horizontalGradient(listOf(GoldAccent.copy(alpha = 0.5f), GoldAccent)) else Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.1f), Color.White.copy(alpha = 0.1f)))
                     )
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.SwapHoriz,
-                                contentDescription = null,
-                                tint = GoldGlow,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.SwapHoriz,
+                                        contentDescription = null,
+                                        tint = GoldGlow,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "With Collectors",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = GoldLight
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = "View Details",
+                                    tint = GoldLight.copy(alpha = 0.8f),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "With Collectors",
-                                fontSize = 11.sp,
-                                color = GoldLight
+                                text = formatCurrency(currency, activeBalance.cashWithOthers),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = GoldGlow
                             )
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = formatCurrency(currency, activeBalance.cashWithOthers),
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = GoldGlow
+                            text = "Tap to view details →",
+                            fontSize = 9.sp,
+                            color = GoldLight.copy(alpha = 0.75f)
                         )
                     }
                 }
@@ -837,24 +945,29 @@ fun StatusMetricTile(
 }
 
 /**
- * 5. Cash with Others (Field Collectors)
+ * 5. Cash with Others (Field Collectors) with Total Balance & Dedicated Collectors Column
  */
 @Composable
 fun EnhancedCashWithOthersCard(
     currency: String,
     holders: Map<String, Double>,
+    allPayments: List<PaymentRecord> = emptyList(),
     onTransferClick: (String, Double) -> Unit,
+    onViewCollectorDetails: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val totalWithCollectors = remember(holders) { holders.values.sum() }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         border = CardDefaults.outlinedCardBorder()
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
+            // Header Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -863,7 +976,7 @@ fun EnhancedCashWithOthersCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .size(32.dp)
+                            .size(34.dp)
                             .clip(CircleShape)
                             .background(GoldAccent.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
@@ -872,41 +985,132 @@ fun EnhancedCashWithOthersCard(
                             imageVector = Icons.Default.SwapHoriz,
                             contentDescription = null,
                             tint = GoldAccent,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Cash with Collectors ($currency)",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Cash with Collectors ($currency)",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Collectors Column & Balance Breakdown",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
-                if (holders.isNotEmpty()) {
-                    Surface(
-                        shape = RoundedCornerShape(99.dp),
-                        color = GoldAccent.copy(alpha = 0.12f)
-                    ) {
+                Surface(
+                    shape = RoundedCornerShape(99.dp),
+                    color = if (totalWithCollectors > 0) GoldAccent.copy(alpha = 0.15f) else StatusPaid.copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = if (totalWithCollectors > 0) "${holders.size} in field" else "Clear",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (totalWithCollectors > 0) GoldAccent else StatusPaid,
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Prominent Total Balance Banner (Clickable to open all collector details)
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable { onViewCollectorDetails("ALL") }
+                    .testTag("banner_total_cash_with_collectors"),
+                color = GoldAccent.copy(alpha = 0.10f),
+                border = CardDefaults.outlinedCardBorder().copy(
+                    brush = Brush.horizontalGradient(listOf(GoldAccent.copy(alpha = 0.4f), GoldGlow))
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(GoldAccent)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "TOTAL BALANCE WITH COLLECTORS",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = GoldAccent,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "${holders.size} active",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = GoldAccent,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            text = formatCurrency(currency, totalWithCollectors),
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (totalWithCollectors > 0) "Cash held across ${holders.size} active collectors • Press to view details" else "All funds collected have reached Main Vault",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Button(
+                        onClick = { onViewCollectorDetails("ALL") },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = GoldAccent,
+                            contentColor = Color.Black
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.testTag("button_view_all_collectors_details")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Details",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Dedicated Collectors Column section
+            Text(
+                text = "Collectors Column (Cash with Whom)",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             if (holders.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 12.dp),
+                        .padding(vertical = 14.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -914,14 +1118,24 @@ fun EnhancedCashWithOthersCard(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = null,
                             tint = StatusPaid,
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(36.dp)
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = "All collected cash has been deposited to the Main Vault!",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = { onViewCollectorDetails("ALL") },
+                            modifier = Modifier.testTag("button_view_history_empty_collectors")
+                        ) {
+                            Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Inspect Collector History", fontSize = 11.sp)
+                        }
                     }
                 }
             } else {
@@ -932,57 +1146,108 @@ fun EnhancedCashWithOthersCard(
                         .joinToString("")
                         .ifBlank { "T" }
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primaryContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = initials,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = holder,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = formatCurrency(currency, amount),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = GoldAccent
-                                )
-                            }
-                        }
-
-                        Button(
-                            onClick = { onTransferClick(holder, amount) },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                            modifier = Modifier.testTag("button_transfer_${holder.replace(" ", "_")}")
-                        ) {
-                            Text("Handover", fontSize = 11.sp)
+                    val paymentsCount = remember(allPayments, holder, currency) {
+                        allPayments.count {
+                            it.heldBy.equals(holder, ignoreCase = true) &&
+                                    it.currency.equals(currency, ignoreCase = true) &&
+                                    it.isPaid
                         }
                     }
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onViewCollectorDetails(holder) }
+                            .testTag("collector_row_${holder.replace(" ", "_")}"),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                        border = CardDefaults.outlinedCardBorder()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            // Left: Avatar and Collector details
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primaryContainer),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = initials,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = holder,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = formatCurrency(currency, amount),
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = GoldAccent
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = MaterialTheme.colorScheme.surface
+                                        ) {
+                                            Text(
+                                                text = "$paymentsCount receipts",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Right: Action buttons (Details & Handover)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { onViewCollectorDetails(holder) },
+                                    modifier = Modifier
+                                        .height(34.dp)
+                                        .testTag("button_details_${holder.replace(" ", "_")}")
+                                ) {
+                                    Text("Details", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                }
+
+                                Button(
+                                    onClick = { onTransferClick(holder, amount) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                    modifier = Modifier
+                                        .height(34.dp)
+                                        .testTag("button_transfer_${holder.replace(" ", "_")}")
+                                ) {
+                                    Text("Handover", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

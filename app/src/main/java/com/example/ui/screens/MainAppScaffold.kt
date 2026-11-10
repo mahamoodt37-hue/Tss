@@ -44,12 +44,23 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.model.Member
+import com.example.ui.components.ContributionHistoryDialog
 import com.example.ui.components.GoogleSheetDialog
 import com.example.ui.components.MemberActionDialog
+import com.example.ui.components.PaymentStatusUpdateDialog
 import com.example.ui.components.TopHeader
 import com.example.ui.components.TransferDialog
+import com.example.ui.viewmodel.MemberPaymentStatus
 import com.example.ui.viewmodel.MemberWithStatus
 import com.example.ui.viewmodel.TssViewModel
+
+data class PaymentUpdateTarget(
+    val member: Member,
+    val monthIndex: Int,
+    val currentStatus: MemberPaymentStatus,
+    val currentHeldBy: String
+)
 
 @Composable
 fun MainAppScaffold(
@@ -63,7 +74,9 @@ fun MainAppScaffold(
     val transfers by viewModel.allTransfers.collectAsStateWithLifecycle()
     val extraCollections by viewModel.allExtraCollections.collectAsStateWithLifecycle()
 
+    var selectedMemberForHistory by remember { mutableStateOf<MemberWithStatus?>(null) }
     var selectedMemberForAction by remember { mutableStateOf<MemberWithStatus?>(null) }
+    var paymentUpdateTarget by remember { mutableStateOf<PaymentUpdateTarget?>(null) }
     var isNewMemberDialogOpen by remember { mutableStateOf(false) }
 
     var transferDialogState by remember {
@@ -193,6 +206,8 @@ fun MainAppScaffold(
                     "dashboard" -> {
                         DashboardScreen(
                             uiState = uiState,
+                            transfers = transfers,
+                            extraCollections = extraCollections,
                             onOpenSheetDialog = { isSheetDialogOpen = true },
                             onExportCsv = { viewModel.generateCsvAndShare(context) },
                             onInitiateTransfer = { holder, cur, amount ->
@@ -209,10 +224,15 @@ fun MainAppScaffold(
                             onSearchChange = { viewModel.setSearchQuery(it) },
                             onFilterChange = { viewModel.setFilterStatus(it) },
                             onToggleShowAllMonths = { viewModel.toggleShowAllMonths(it) },
-                            onMemberClick = { selectedMemberForAction = it },
+                            onMemberClick = { selectedMemberForHistory = it },
                             onAddNewMember = { isNewMemberDialogOpen = true },
                             onTogglePaidStatus = { item ->
-                                viewModel.toggleMemberPaidStatus(item.member.id, uiState.selectedMonthIndex)
+                                paymentUpdateTarget = PaymentUpdateTarget(
+                                    member = item.member,
+                                    monthIndex = uiState.selectedMonthIndex,
+                                    currentStatus = item.status,
+                                    currentHeldBy = item.heldBy
+                                )
                             },
                             onChangeAllottedMonth = { item, newMonth ->
                                 viewModel.updateMemberAllottedMonth(item.member.id, newMonth)
@@ -236,12 +256,73 @@ fun MainAppScaffold(
                             extraCollections = extraCollections,
                             onAddExtra = { name, mobile, purpose, amount, cur, heldBy ->
                                 viewModel.addExtraCollection(name, mobile, purpose, amount, cur, heldBy)
+                            },
+                            onAddNewMember = { isNewMemberDialogOpen = true },
+                            onMemberClick = { selectedMemberForHistory = it },
+                            onTogglePaidStatus = { item ->
+                                paymentUpdateTarget = PaymentUpdateTarget(
+                                    member = item.member,
+                                    monthIndex = uiState.selectedMonthIndex,
+                                    currentStatus = item.status,
+                                    currentHeldBy = item.heldBy
+                                )
+                            },
+                            onChangeAllottedMonth = { item, newMonth ->
+                                viewModel.updateMemberAllottedMonth(item.member.id, newMonth)
                             }
                         )
                     }
                 }
             }
         }
+    }
+
+    // Contribution History Modal
+    if (selectedMemberForHistory != null) {
+        val selected = selectedMemberForHistory!!
+        val liveMember = uiState.membersWithStatus.find { it.member.id == selected.member.id } ?: selected
+        ContributionHistoryDialog(
+            memberWithStatus = liveMember,
+            allPayments = uiState.allPayments,
+            onDismiss = { selectedMemberForHistory = null },
+            onRequestUpdatePayment = { monthIndex, currentStatus, currentHeldBy ->
+                paymentUpdateTarget = PaymentUpdateTarget(
+                    member = liveMember.member,
+                    monthIndex = monthIndex,
+                    currentStatus = currentStatus,
+                    currentHeldBy = currentHeldBy
+                )
+            },
+            onEditMember = { memberToEdit ->
+                selectedMemberForHistory = null
+                selectedMemberForAction = liveMember.copy(member = memberToEdit)
+            }
+        )
+    }
+
+    // Payment Status Update Dialog (Cash in Main Account or with Anyone's Hand)
+    if (paymentUpdateTarget != null) {
+        val target = paymentUpdateTarget!!
+        PaymentStatusUpdateDialog(
+            member = target.member,
+            monthIndex = target.monthIndex,
+            currentStatus = target.currentStatus,
+            currentHeldBy = target.currentHeldBy,
+            knownHolders = uiState.knownHolders,
+            onDismiss = { paymentUpdateTarget = null },
+            onConfirm = { isPaid, isPending, heldBy ->
+                viewModel.setPayment(
+                    memberId = target.member.id,
+                    monthIndex = target.monthIndex,
+                    isPaid = isPaid,
+                    isPending = isPending,
+                    heldBy = heldBy,
+                    amount = target.member.amount,
+                    currency = target.member.currency
+                )
+                paymentUpdateTarget = null
+            }
+        )
     }
 
     // Member Action / Edit Dialog

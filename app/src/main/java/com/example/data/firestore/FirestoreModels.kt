@@ -55,7 +55,9 @@ data class FirestorePayment(
     val heldBy: String = "Main",
     val amount: Double = 0.0,
     val currency: String = "AED",
-    val updatedBy: String = ""
+    val updatedBy: String = "",
+    val date: String = "",
+    val timestamp: Long = 0L
 ) {
     fun toDomainModel(): PaymentRecord = PaymentRecord(
         memberId = memberId,
@@ -64,7 +66,8 @@ data class FirestorePayment(
         isPending = isPending,
         heldBy = heldBy,
         amount = amount,
-        currency = currency
+        currency = currency,
+        timestamp = if (timestamp > 0L) timestamp else System.currentTimeMillis()
     )
 }
 

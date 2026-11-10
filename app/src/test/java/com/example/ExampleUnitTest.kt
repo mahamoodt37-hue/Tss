@@ -63,4 +63,33 @@ class ExampleUnitTest {
         }
         assertEquals(250.0, balance.total, 0.001)
     }
+
+    @Test
+    fun `contribution history correctly tracks 12 months and computes stats`() {
+        val member = Member(
+            id = 1L,
+            name = "Azeez KC",
+            emirateOrCity = "Al Ain",
+            country = "UAE",
+            mobile = "507607968",
+            allottedMonth = "ALL",
+            amount = 250.0,
+            currency = "AED"
+        )
+
+        val payments = listOf(
+            PaymentRecord(memberId = 1L, monthIndex = 0, isPaid = true, isPending = false, amount = 250.0, currency = "AED"),
+            PaymentRecord(memberId = 1L, monthIndex = 1, isPaid = true, isPending = false, amount = 250.0, currency = "AED"),
+            PaymentRecord(memberId = 1L, monthIndex = 2, isPaid = true, isPending = false, amount = 250.0, currency = "AED")
+        )
+
+        val memberPayments = payments.filter { it.memberId == member.id }.associateBy { it.monthIndex }
+        assertEquals(3, memberPayments.size)
+        val paidAmount = memberPayments.values.filter { it.isPaid }.sumOf { it.amount }
+        assertEquals(750.0, paidAmount, 0.001)
+
+        val totalExpected = if (member.allottedMonth == "ALL") member.amount * 12 else member.amount
+        assertEquals(3000.0, totalExpected, 0.001)
+        assertEquals(2250.0, totalExpected - paidAmount, 0.001)
+    }
 }

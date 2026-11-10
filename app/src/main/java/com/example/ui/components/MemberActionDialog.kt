@@ -164,8 +164,8 @@ fun MemberActionDialog(
                             OutlinedTextField(
                                 value = heldBy,
                                 onValueChange = { heldBy = it },
-                                label = { Text("Cash received / held by") },
-                                placeholder = { Text("Main or collector name") },
+                                label = { Text("Cash Location / Collector Name") },
+                                placeholder = { Text("Main Account or Collector name (e.g. Azeez KC)") },
                                 singleLine = true,
                                 modifier = Modifier
                                     .fillMaxWidth()

@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import com.example.data.model.Member
+import com.example.data.model.PaymentRecord
 
 val MONTHS = listOf("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
 const val CURRENT_MONTH_INDEX = 10 // November (0-based) for 2026 fund cycle
@@ -49,6 +50,7 @@ data class TssUiState(
     val inrBalance: CurrencyBalance = CurrencyBalance(),
     val monthStats: MonthCollectionStats = MonthCollectionStats(),
     val membersWithStatus: List<MemberWithStatus> = emptyList(),
+    val allPayments: List<PaymentRecord> = emptyList(),
     val knownHolders: List<String> = listOf("Main"),
     val googleSheetUrl: String = "",
     val isSyncing: Boolean = false,

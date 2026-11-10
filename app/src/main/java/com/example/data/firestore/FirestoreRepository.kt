@@ -332,6 +332,8 @@ class FirestoreRepository(
                 throw e
             }
         } else {
+            val nowTime = System.currentTimeMillis()
+            val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date(nowTime))
             val payload = mapOf(
                 "memberId" to memberId,
                 "monthIndex" to monthIndex,
@@ -340,7 +342,9 @@ class FirestoreRepository(
                 "heldBy" to heldBy.trim().ifBlank { "Main" },
                 "amount" to amount,
                 "currency" to currency.trim().uppercase(),
-                "updatedBy" to (auth.currentUser?.email ?: uid)
+                "updatedBy" to (auth.currentUser?.email ?: uid),
+                "date" to dateStr,
+                "timestamp" to nowTime
             )
             try {
                 docRef.set(payload).await()

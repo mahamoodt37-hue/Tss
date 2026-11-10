@@ -154,7 +154,9 @@ class TssViewModel(application: Application) : AndroidViewModel(application) {
         // Compute balances
         val col = mutableMapOf<String, MutableMap<String, Double>>()
         fun addCash(holder: String, cur: String, amount: Double) {
-            val h = holder.trim().ifBlank { "Main" }
+            val trimmed = holder.trim().ifBlank { "Main" }
+            val existingKey = col.keys.firstOrNull { it.equals(trimmed, ignoreCase = true) }
+            val h = existingKey ?: trimmed
             val c = cur.trim().uppercase()
             val map = col.getOrPut(h) { mutableMapOf("AED" to 0.0, "INR" to 0.0) }
             map[c] = (map[c] ?: 0.0) + amount
@@ -312,6 +314,7 @@ class TssViewModel(application: Application) : AndroidViewModel(application) {
             inrBalance = inrBal,
             monthStats = monthStats,
             membersWithStatus = filteredMembers,
+            allPayments = payments,
             knownHolders = holderSet.toList(),
             googleSheetUrl = sync.sheetUrl,
             isSyncing = sync.isSyncing,
