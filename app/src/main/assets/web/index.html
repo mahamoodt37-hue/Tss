@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Thajusunna Pilathra (TSS) Fund</title>
+  <style>
+    :root {
+      box-sizing: border-box;
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      /* Modern Emerald-Slate Cohesive Palette */
+      --bg: #f8fafc;       /* Slate 50 */
+      --c: #ffffff;        /* Pure Surface White */
+      --t: #0f172a;        /* Slate 900 Text */
+      --m: #64748b;        /* Slate 500 Muted */
+      --g: #059669;        /* Emerald 600 Primary */
+      --g-deep: #064e3b;   /* Emerald 900 Deep */
+      --b: #e2e8f0;        /* Slate 200 Border */
+      --ok: #059669;       /* Emerald 600 Paid */
+      --no: #e11d48;       /* Rose 600 Unpaid */
+      --pe: #d97706;       /* Amber 600 Pending */
+      --ip: #2563eb;       /* Blue 600 In Progress */
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #020617;     /* Slate 950 */
+        --c: #0f172a;      /* Slate 900 Surface */
+        --t: #f8fafc;      /* Slate 50 Text */
+        --m: #94a3b8;      /* Slate 400 Muted */
+        --g: #10b981;      /* Emerald 500 Primary */
+        --b: #334155;      /* Slate 700 Border */
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--t);
+      font: 15px system-ui, -apple-system, sans-serif;
+      padding-bottom: 70px;
+    }
+    header {
+      background: linear-gradient(135deg, #064e3b, #059669);
+      color: #fff;
+      padding: 16px 18px;
+    }
+    header h1 { margin: 0; font-size: 18px; font-weight: 700; }
+    header small { opacity: .85; }
+    .bar { display: flex; gap: 10px; padding: 12px 14px; flex-wrap: wrap; }
+    .card {
+      background: var(--c);
+      border: 1px solid var(--b);
+      border-radius: 16px; /* 16px softer contemporary border-radius */
+      padding: 14px;
+      margin: 10px 14px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+    }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .big { font-size: 24px; font-weight: 800; }
+    .m { color: var(--m); font-size: 12px; }
+    select, input, button {
+      font: inherit;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--b);
+      background: var(--c);
+      color: var(--t);
+    }
+    input, select { width: 100%; }
+    button { cursor: pointer; font-weight: 600; }
+    .p { background: var(--g); color: #fff; border: 0; }
+    .p:hover { opacity: .92; }
+    .seg { display: flex; border: 1px solid var(--b); border-radius: 12px; overflow: hidden; }
+    .seg button { border: 0; border-radius: 0; flex: 1; padding: 8px; }
+    .seg .on { background: var(--g); color: #fff; }
+    .chip { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 99px; color: #fff; white-space: nowrap; }
+    .Paid { background: var(--ok); }
+    .Unpaid { background: var(--no); }
+    .Pending { background: var(--pe); }
+    .Inprogress { background: var(--ip); }
+    .prog { display: flex; height: 12px; border-radius: 99px; overflow: hidden; background: var(--b); margin: 10px 0; }
+    nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      background: var(--c);
+      border-top: 1px solid var(--b);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    nav button { flex: 1; border: 0; background: none; color: var(--m); padding: 12px 4px; font-size: 12px; }
+    nav .on { color: var(--g); font-weight: 700; }
+    .li { padding: 12px 0; border-bottom: 1px solid var(--b); }
+    .li:last-child { border: 0; }
+    dialog {
+      width: 92%;
+      max-width: 440px;
+      border: 1px solid var(--b);
+      border-radius: 16px;
+      background: var(--c);
+      color: var(--t);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Thajusunna Pilathra (TSS)</h1>
+    <small>Monthly fund collection · 2026</small>
+  </header>
+  <div class="bar">
+    <div class="seg" style="flex:1" id="cur"></div>
+    <select id="mon" style="flex:1"></select>
+  </div>
+  <main id="v"></main>
+  <nav id="nav"></nav>
+  <dialog id="dlg"></dialog>
+</body>
+</html>

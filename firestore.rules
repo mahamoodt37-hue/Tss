@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isValidMember(data) {
+      return data.keys().hasAll(['id', 'name', 'amount', 'currency']) &&
+             data.id is number &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.amount is number && data.amount >= 0 &&
+             data.currency is string && (data.currency == 'AED' || data.currency == 'INR');
+    }
+
+    function isValidPayment(data) {
+      return data.keys().hasAll(['memberId', 'monthIndex', 'isPaid', 'isPending', 'heldBy', 'amount', 'currency']) &&
+             data.memberId is number &&
+             data.monthIndex is number && data.monthIndex >= 0 && data.monthIndex <= 11 &&
+             data.isPaid is bool &&
+             data.isPending is bool &&
+             data.heldBy is string && data.heldBy.size() <= 100 &&
+             data.amount is number && data.amount >= 0 &&
+             data.currency is string && (data.currency == 'AED' || data.currency == 'INR');
+    }
+
+    function isValidTransfer(data) {
+      return data.keys().hasAll(['holderName', 'currency', 'amount', 'date']) &&
+             data.holderName is string && data.holderName.size() > 0 && data.holderName.size() <= 100 &&
+             data.currency is string && (data.currency == 'AED' || data.currency == 'INR') &&
+             data.amount is number && data.amount > 0 &&
+             data.date is string && data.date.size() == 10;
+    }
+
+    function isValidExtra(data) {
+      return data.keys().hasAll(['name', 'amount', 'currency', 'heldBy', 'date']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.amount is number && data.amount > 0 &&
+             data.currency is string && (data.currency == 'AED' || data.currency == 'INR') &&
+             data.heldBy is string && data.heldBy.size() <= 100 &&
+             data.date is string && data.date.size() == 10;
+    }
+
+    // Members collection
+    match /members/{memberId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isValidMember(request.resource.data);
+      allow delete: if isAuthenticated();
+    }
+
+    // Payments collection
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isValidPayment(request.resource.data);
+      allow delete: if isAuthenticated();
+    }
+
+    // Transfers collection
+    match /transfers/{transferId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidTransfer(request.resource.data);
+      allow update, delete: if isAuthenticated();
+    }
+
+    // Extra collections
+    match /extra_collections/{extraId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidExtra(request.resource.data);
+      allow update, delete: if isAuthenticated();
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "1.0",
+  "collections": [
+    {
+      "name": "members",
+      "description": "Registered community members of TSS Fund 2026",
+      "documentId": "Numeric member ID as string (e.g. '1', '2')",
+      "fields": {
+        "id": { "type": "number", "description": "Numeric ID of the member" },
+        "name": { "type": "string", "description": "Full name of the member" },
+        "emirateOrCity": { "type": "string", "description": "Emirate or city" },
+        "country": { "type": "string", "description": "Country of residence" },
+        "mobile": { "type": "string", "description": "Contact phone number" },
+        "allottedMonth": { "type": "string", "description": "ALL or month abbreviation JAN-DEC" },
+        "amount": { "type": "number", "description": "Target monthly contribution amount" },
+        "currency": { "type": "string", "description": "AED or INR" },
+        "updatedAt": { "type": "timestamp", "description": "Last modified timestamp" }
+      }
+    },
+    {
+      "name": "payments",
+      "description": "Monthly payment records for members",
+      "documentId": "{memberId}_{monthIndex} compound key",
+      "fields": {
+        "memberId": { "type": "number", "description": "ID of the member" },
+        "monthIndex": { "type": "number", "description": "0 for JAN through 11 for DEC" },
+        "isPaid": { "type": "boolean", "description": "True if payment is confirmed" },
+        "isPending": { "type": "boolean", "description": "True if marked pending" },
+        "heldBy": { "type": "string", "description": "Collector or vault holding the funds ('Main' or volunteer name)" },
+        "amount": { "type": "number", "description": "Amount paid" },
+        "currency": { "type": "string", "description": "AED or INR" },
+        "updatedBy": { "type": "string", "description": "Firebase UID of user who recorded the payment" },
+        "updatedAt": { "type": "timestamp", "description": "Timestamp of payment update" }
+      }
+    },
+    {
+      "name": "transfers",
+      "description": "Cash handover transfers from collectors to Main account",
+      "documentId": "Auto-generated document ID",
+      "fields": {
+        "holderName": { "type": "string", "description": "Name of the collector handing over cash" },
+        "currency": { "type": "string", "description": "AED or INR" },
+        "amount": { "type": "number", "description": "Transferred amount" },
+        "date": { "type": "string", "description": "YYYY-MM-DD date string" },
+        "createdBy": { "type": "string", "description": "Firebase UID of user who recorded transfer" },
+        "createdAt": { "type": "timestamp", "description": "Server timestamp of creation" }
+      }
+    },
+    {
+      "name": "extra_collections",
+      "description": "Special or one-off fund collections",
+      "documentId": "Auto-generated document ID",
+      "fields": {
+        "name": { "type": "string", "description": "Contributor name" },
+        "mobile": { "type": "string", "description": "Contributor phone" },
+        "purpose": { "type": "string", "description": "Collection purpose (e.g. Ramadan special)" },
+        "amount": { "type": "number", "description": "Amount contributed" },
+        "currency": { "type": "string", "description": "AED or INR" },
+        "heldBy": { "type": "string", "description": "Cash holder" },
+        "date": { "type": "string", "description": "YYYY-MM-DD date string" },
+        "createdBy": { "type": "string", "description": "Firebase UID of user who recorded extra entry" },
+        "createdAt": { "type": "timestamp", "description": "Server timestamp of creation" }
+      }
+    }
+  ]
+}
