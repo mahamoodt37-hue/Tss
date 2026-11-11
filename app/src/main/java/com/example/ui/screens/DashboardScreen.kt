@@ -291,7 +291,7 @@ fun HeroTreasuryBanner(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "Pilathra Welfare Treasury",
+                    text = "Thajusunna Pilathara Welfare Treasury",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
@@ -738,7 +738,7 @@ fun EnhancedCollectionProgressCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "$monthName 2026 Collection Progress",
                         fontSize = 15.sp,
@@ -752,12 +752,15 @@ fun EnhancedCollectionProgressCard(
                     )
                 }
 
+                Spacer(modifier = Modifier.width(8.dp))
+
                 Surface(
                     shape = RoundedCornerShape(99.dp),
-                    color = if (percentCollected >= 80) StatusPaid.copy(alpha = 0.15f) else GoldAccent.copy(alpha = 0.15f)
+                    color = if (percentCollected >= 80) StatusPaid.copy(alpha = 0.15f) else GoldAccent.copy(alpha = 0.15f),
+                    modifier = Modifier.align(Alignment.CenterVertically)
                 ) {
                     Text(
-                        text = "$percentCollected% Collected",
+                        text = "$percentCollected%",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = if (percentCollected >= 80) StatusPaid else GoldAccent,
@@ -973,7 +976,10 @@ fun EnhancedCashWithOthersCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(34.dp)
@@ -989,31 +995,34 @@ fun EnhancedCashWithOthersCard(
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Cash with Collectors ($currency)",
-                            fontSize = 16.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Collectors Column & Balance Breakdown",
+                            text = "Collectors Column & Breakdown",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
+                Spacer(modifier = Modifier.width(8.dp))
+
                 Surface(
                     shape = RoundedCornerShape(99.dp),
-                    color = if (totalWithCollectors > 0) GoldAccent.copy(alpha = 0.15f) else StatusPaid.copy(alpha = 0.15f)
+                    color = if (totalWithCollectors > 0) GoldAccent.copy(alpha = 0.15f) else StatusPaid.copy(alpha = 0.15f),
+                    modifier = Modifier.align(Alignment.CenterVertically)
                 ) {
                     Text(
                         text = if (totalWithCollectors > 0) "${holders.size} in field" else "Clear",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (totalWithCollectors > 0) GoldAccent else StatusPaid,
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
                     )
                 }
             }

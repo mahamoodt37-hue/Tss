@@ -342,7 +342,7 @@ private fun dialNumber(context: Context, mobile: String) {
 private fun openWhatsApp(context: Context, mobile: String, name: String) {
     try {
         val cleanNumber = mobile.replace(Regex("[^0-9]"), "")
-        val message = "Assalamu Alaikum $name, regards from Thajusunna Pilathra (TSS) Monthly Fund collection."
+        val message = "Assalamu Alaikum $name, regards from Thajusunna Pilathara (TSS) Monthly Fund collection."
         val url = "https://api.whatsapp.com/send?phone=$cleanNumber&text=${Uri.encode(message)}"
         val intent = Intent(Intent.ACTION_VIEW).apply {
             data = Uri.parse(url)

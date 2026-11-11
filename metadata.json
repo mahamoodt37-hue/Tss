@@ -1,6 +1,6 @@
 {
   "name": "TSS Fund",
-  "description": "Monthly fund collection and member contribution tracking for Thajusunna Pilathra (TSS) 2026.",
+  "description": "Monthly fund collection and member contribution tracking for Thajusunna Pilathara (TSS) 2026.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -109,9 +109,9 @@ fun TopHeader(
                         contentAlignment = Alignment.Center
                     ) {
                         Image(
-                            painter = painterResource(id = R.drawable.ic_tss_fund_logo_1794278994623),
+                            painter = painterResource(id = R.drawable.ic_tss_emblem_circle),
                             contentDescription = "TSS Emblem",
-                            contentScale = ContentScale.Crop,
+                            contentScale = ContentScale.Fit,
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
@@ -122,7 +122,7 @@ fun TopHeader(
 
                     Column {
                         Text(
-                            text = "Thajusunna Pilathra",
+                            text = "Thajusunna Pilathara",
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
