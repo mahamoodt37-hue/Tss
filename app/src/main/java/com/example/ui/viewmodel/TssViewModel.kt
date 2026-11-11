@@ -7,12 +7,16 @@ import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.db.AppDatabase
 import com.example.data.db.SeedData
 import com.example.data.firestore.FirestoreRepository
 import com.example.data.model.ExtraCollection
 import com.example.data.model.Member
 import com.example.data.model.PaymentRecord
 import com.example.data.model.TransferRecord
+import com.example.data.repository.TssRepository
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +32,13 @@ import java.util.Date
 import java.util.Locale
 
 class TssViewModel(application: Application) : AndroidViewModel(application) {
+    private val database = AppDatabase.getDatabase(application, viewModelScope)
+    private val tssRepository = TssRepository(
+        database.memberDao(),
+        database.paymentDao(),
+        database.transferDao(),
+        database.extraCollectionDao()
+    )
     private val firestoreRepository = FirestoreRepository(application)
 
     private val prefs = application.getSharedPreferences("tss_prefs", Context.MODE_PRIVATE)
@@ -43,44 +54,76 @@ class TssViewModel(application: Application) : AndroidViewModel(application) {
     private val _syncMessage = MutableStateFlow<String?>(null)
 
     init {
-        // Seed initial 55 members to cloud if collection is currently empty
+        // 1. Ensure initial members in local SQLite Room database immediately
         viewModelScope.launch {
             try {
-                firestoreRepository.seedInitialMembersIfEmpty(SeedData.getInitialMembers())
+                if (database.memberDao().getMemberCount() == 0) {
+                    database.memberDao().insertAll(SeedData.getInitialMembers())
+                }
             } catch (e: Exception) {
-                Log.w("TssViewModel", "Initial seed check: ${e.message}")
+                Log.w("TssViewModel", "Local initial seed check: ${e.message}")
+            }
+        }
+
+        // 2. Ensure initial members in Cloud Firestore as soon as authenticated admin opens the app
+        viewModelScope.launch {
+            try {
+                firestoreRepository.authFlow.collect { user ->
+                    if (user != null) {
+                        try {
+                            firestoreRepository.seedInitialMembersIfEmpty(SeedData.getInitialMembers())
+                        } catch (e: Exception) {
+                            Log.w("TssViewModel", "Cloud seed check: ${e.message}")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("TssViewModel", "Auth flow observer: ${e.message}")
             }
         }
     }
 
-    val allTransfers: StateFlow<List<TransferRecord>> = firestoreRepository.observeTransfers()
-        .catch { error ->
-            val firestoreError = generateSequence(error) { it.cause }
-                .filterIsInstance<FirebaseFirestoreException>()
-                .firstOrNull()
-            if (firestoreError == null && error is CancellationException) throw error
-            Log.e("TssViewModel", "Error observing transfers: ${firestoreError?.message ?: error.message}")
-            emit(emptyList())
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val allTransfers: StateFlow<List<TransferRecord>> = combine(
+        firestoreRepository.observeTransfers().catch { emit(emptyList()) },
+        tssRepository.allTransfers.catch { emit(emptyList()) }
+    ) { cloud, local ->
+        if (cloud.isNotEmpty()) cloud else local
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val allExtraCollections: StateFlow<List<ExtraCollection>> = firestoreRepository.observeExtraCollections()
-        .catch { error ->
-            val firestoreError = generateSequence(error) { it.cause }
-                .filterIsInstance<FirebaseFirestoreException>()
-                .firstOrNull()
-            if (firestoreError == null && error is CancellationException) throw error
-            Log.e("TssViewModel", "Error observing extra collections: ${firestoreError?.message ?: error.message}")
-            emit(emptyList())
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val allExtraCollections: StateFlow<List<ExtraCollection>> = combine(
+        firestoreRepository.observeExtraCollections().catch { emit(emptyList()) },
+        tssRepository.allExtraCollections.catch { emit(emptyList()) }
+    ) { cloud, local ->
+        if (cloud.isNotEmpty()) cloud else local
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val uiState: StateFlow<TssUiState> = combine(
         combine(
-            firestoreRepository.observeMembers().catch { emit(emptyList()) },
-            firestoreRepository.observePayments().catch { emit(emptyList()) },
-            firestoreRepository.observeTransfers().catch { emit(emptyList()) },
-            firestoreRepository.observeExtraCollections().catch { emit(emptyList()) }
+            combine(
+                firestoreRepository.observeMembers().catch { emit(emptyList()) },
+                tssRepository.allMembers.catch { emit(emptyList()) }
+            ) { cloud, local ->
+                if (cloud.isNotEmpty()) cloud else local
+            },
+            combine(
+                firestoreRepository.observePayments().catch { emit(emptyList()) },
+                tssRepository.allPayments.catch { emit(emptyList()) }
+            ) { cloud, local ->
+                val map = mutableMapOf<String, PaymentRecord>()
+                for (p in local) {
+                    map["${p.memberId}|${p.monthIndex}"] = p
+                }
+                for (p in cloud) {
+                    val key = "${p.memberId}|${p.monthIndex}"
+                    val existing = map[key]
+                    if (existing == null || p.timestamp >= existing.timestamp) {
+                        map[key] = p
+                    }
+                }
+                map.values.toList()
+            },
+            allTransfers,
+            allExtraCollections
         ) { members, payments, transfers, extras ->
             DataBundle(members, payments, transfers, extras)
         },
@@ -244,12 +287,27 @@ class TssViewModel(application: Application) : AndroidViewModel(application) {
             when (status) {
                 MemberPaymentStatus.PAID -> {
                     paidCount++
-                    collectedAmount += m.amount
+                    val amt = if (p != null && p.amount > 0.0) p.amount else m.amount
+                    collectedAmount += amt
                 }
                 MemberPaymentStatus.IN_PROGRESS -> inProgressCount++
                 MemberPaymentStatus.PENDING -> pendingCount++
                 MemberPaymentStatus.UNPAID -> unpaidCount++
                 MemberPaymentStatus.NOT_DUE -> {}
+            }
+        }
+
+        // Also credit payments marked Paid for this month from members who are not in dueMembers
+        // (for example: members allotted another month who paid in advance or off-cycle)
+        for (p in payments) {
+            if (p.isPaid && p.monthIndex == filter.monthIndex) {
+                val member = memberMap[p.memberId]
+                val cur = (if (p.currency.isNotBlank()) p.currency else member?.currency ?: "AED").trim().uppercase()
+                if (cur.equals(filter.currency, ignoreCase = true) && (member == null || !dueMembers.contains(member))) {
+                    val amt = if (p.amount > 0.0) p.amount else (member?.amount ?: 0.0)
+                    collectedAmount += amt
+                    paidCount++
+                }
             }
         }
 
@@ -355,20 +413,40 @@ class TssViewModel(application: Application) : AndroidViewModel(application) {
         amount: Double,
         currency: String
     ) {
+        val safeHeldBy = heldBy.trim().ifBlank { "Main" }
+        val safeCurrency = currency.trim().uppercase().ifBlank { "AED" }
         viewModelScope.launch {
+            // 1. Immediately write to Room database for 0ms local reflection
             try {
-                firestoreRepository.setPaymentStatus(
+                tssRepository.setPaymentStatus(
                     memberId = memberId,
                     monthIndex = monthIndex,
                     isPaid = isPaid,
                     isPending = isPending,
-                    heldBy = heldBy,
+                    heldBy = safeHeldBy,
                     amount = amount,
-                    currency = currency
+                    currency = safeCurrency
                 )
+            } catch (e: Exception) {
+                Log.e("TssViewModel", "Local setPayment error: ${e.message}")
+            }
+
+            // 2. Persist to Cloud Firestore for cross-device real-time sync
+            try {
+                if (Firebase.auth.currentUser != null) {
+                    firestoreRepository.setPaymentStatus(
+                        memberId = memberId,
+                        monthIndex = monthIndex,
+                        isPaid = isPaid,
+                        isPending = isPending,
+                        heldBy = safeHeldBy,
+                        amount = amount,
+                        currency = safeCurrency
+                    )
+                }
                 triggerAutoSyncIfEnabled()
             } catch (e: Exception) {
-                Log.e("TssViewModel", "Failed to set payment: ${e.message}")
+                Log.e("TssViewModel", "Cloud setPayment error: ${e.message}")
             }
         }
     }
@@ -377,15 +455,19 @@ class TssViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val currentState = uiState.value
             val item = currentState.membersWithStatus.find { it.member.id == memberId }
-            val member = item?.member ?: return@launch
-            val isCurrentlyPaid = item.status == MemberPaymentStatus.PAID
+            val member = item?.member ?: run {
+                database.memberDao().getMemberById(memberId)
+            } ?: return@launch
+
+            val isCurrentlyPaid = item?.status == MemberPaymentStatus.PAID ||
+                currentState.allPayments.any { it.memberId == memberId && it.monthIndex == monthIndex && it.isPaid }
 
             setPayment(
                 memberId = memberId,
                 monthIndex = monthIndex,
                 isPaid = !isCurrentlyPaid,
                 isPending = false,
-                heldBy = if (!isCurrentlyPaid) "Main" else item.heldBy,
+                heldBy = if (!isCurrentlyPaid) "Main" else (item?.heldBy ?: "Main"),
                 amount = member.amount,
                 currency = member.currency
             )
@@ -396,24 +478,47 @@ class TssViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val currentState = uiState.value
             val item = currentState.membersWithStatus.find { it.member.id == memberId }
-            val member = item?.member ?: return@launch
+            val member = item?.member ?: run {
+                database.memberDao().getMemberById(memberId)
+            } ?: return@launch
             val updated = member.copy(allottedMonth = newMonth.trim().uppercase())
             try {
-                firestoreRepository.saveMember(updated)
+                tssRepository.updateMember(updated)
+            } catch (e: Exception) {
+                Log.e("TssViewModel", "Local update member month error: ${e.message}")
+            }
+            try {
+                if (Firebase.auth.currentUser != null) {
+                    firestoreRepository.saveMember(updated)
+                }
                 triggerAutoSyncIfEnabled()
             } catch (e: Exception) {
-                Log.e("TssViewModel", "Failed to update allotted month: ${e.message}")
+                Log.e("TssViewModel", "Cloud update member month error: ${e.message}")
             }
         }
     }
 
     fun saveMember(member: Member) {
         viewModelScope.launch {
+            val memberId = if (member.id <= 0L) System.currentTimeMillis() else member.id
+            val memberToSave = member.copy(id = memberId)
             try {
-                firestoreRepository.saveMember(member)
+                val existing = database.memberDao().getMemberById(memberId)
+                if (existing != null) {
+                    tssRepository.updateMember(memberToSave)
+                } else {
+                    tssRepository.insertMember(memberToSave)
+                }
+            } catch (e: Exception) {
+                Log.e("TssViewModel", "Local saveMember error: ${e.message}")
+            }
+            try {
+                if (Firebase.auth.currentUser != null) {
+                    firestoreRepository.saveMember(memberToSave)
+                }
                 triggerAutoSyncIfEnabled()
             } catch (e: Exception) {
-                Log.e("TssViewModel", "Failed to save member: ${e.message}")
+                Log.e("TssViewModel", "Cloud saveMember error: ${e.message}")
             }
         }
     }
@@ -421,10 +526,17 @@ class TssViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteMember(memberId: Long) {
         viewModelScope.launch {
             try {
-                firestoreRepository.deleteMember(memberId)
+                tssRepository.deleteMember(memberId)
+            } catch (e: Exception) {
+                Log.e("TssViewModel", "Local deleteMember error: ${e.message}")
+            }
+            try {
+                if (Firebase.auth.currentUser != null) {
+                    firestoreRepository.deleteMember(memberId)
+                }
                 triggerAutoSyncIfEnabled()
             } catch (e: Exception) {
-                Log.e("TssViewModel", "Failed to delete member: ${e.message}")
+                Log.e("TssViewModel", "Cloud deleteMember error: ${e.message}")
             }
         }
     }
@@ -432,11 +544,20 @@ class TssViewModel(application: Application) : AndroidViewModel(application) {
     fun addTransfer(holderName: String, currency: String, amount: Double) {
         viewModelScope.launch {
             val dateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            val safeHolder = holderName.trim().ifBlank { "Main" }
+            val safeCur = currency.trim().uppercase().ifBlank { "AED" }
             try {
-                firestoreRepository.addTransfer(holderName, currency, amount, dateStr)
+                tssRepository.addTransfer(safeHolder, safeCur, amount, dateStr)
+            } catch (e: Exception) {
+                Log.e("TssViewModel", "Local addTransfer error: ${e.message}")
+            }
+            try {
+                if (Firebase.auth.currentUser != null) {
+                    firestoreRepository.addTransfer(safeHolder, safeCur, amount, dateStr)
+                }
                 triggerAutoSyncIfEnabled()
             } catch (e: Exception) {
-                Log.e("TssViewModel", "Failed to add transfer: ${e.message}")
+                Log.e("TssViewModel", "Cloud addTransfer error: ${e.message}")
             }
         }
     }
@@ -451,19 +572,28 @@ class TssViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         viewModelScope.launch {
             val dateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            val safeHolder = heldBy.trim().ifBlank { "Main" }
+            val safeCur = currency.trim().uppercase().ifBlank { "AED" }
             try {
-                firestoreRepository.addExtraCollection(
-                    name = name,
-                    mobile = mobile,
-                    purpose = purpose,
-                    amount = amount,
-                    currency = currency,
-                    heldBy = heldBy,
-                    date = dateStr
-                )
+                tssRepository.addExtraCollection(name, mobile, purpose, amount, safeCur, safeHolder, dateStr)
+            } catch (e: Exception) {
+                Log.e("TssViewModel", "Local addExtraCollection error: ${e.message}")
+            }
+            try {
+                if (Firebase.auth.currentUser != null) {
+                    firestoreRepository.addExtraCollection(
+                        name = name,
+                        mobile = mobile,
+                        purpose = purpose,
+                        amount = amount,
+                        currency = safeCur,
+                        heldBy = safeHolder,
+                        date = dateStr
+                    )
+                }
                 triggerAutoSyncIfEnabled()
             } catch (e: Exception) {
-                Log.e("TssViewModel", "Failed to add extra collection: ${e.message}")
+                Log.e("TssViewModel", "Cloud addExtraCollection error: ${e.message}")
             }
         }
     }

@@ -22,8 +22,11 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Login
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -50,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.ui.theme.EmeraldMidnight
 import com.example.ui.theme.GoldAccent
+import com.example.ui.theme.GoldGlow
 import com.example.ui.theme.TealDark
 import com.example.ui.viewmodel.MONTHS
 
@@ -63,6 +67,7 @@ fun TopHeader(
     onOpenSheetDialog: () -> Unit,
     isSheetLinked: Boolean,
     userEmail: String? = null,
+    onSignInRequest: () -> Unit = {},
     onSignOut: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -142,6 +147,39 @@ fun TopHeader(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Viewer / Admin status pill
+                    if (userEmail.isNullOrBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = GoldAccent.copy(alpha = 0.2f),
+                            border = CardDefaults.outlinedCardBorder().copy(brush = Brush.horizontalGradient(listOf(GoldAccent, GoldGlow))),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable { onSignInRequest() }
+                                .testTag("button_admin_login_pill")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = GoldAccent,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Admin Login",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+
                     // Google Sheet sync button
                     IconButton(
                         onClick = onOpenSheetDialog,
@@ -183,7 +221,7 @@ fun TopHeader(
                             Icon(
                                 imageVector = Icons.Default.AccountCircle,
                                 contentDescription = "User Account",
-                                tint = GoldAccent,
+                                tint = if (!userEmail.isNullOrBlank()) GoldAccent else Color.White.copy(alpha = 0.8f),
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -197,9 +235,10 @@ fun TopHeader(
                                     text = {
                                         Column {
                                             Text(
-                                                text = "Signed in as",
+                                                text = "Signed in as Admin",
                                                 fontSize = 11.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                fontWeight = FontWeight.Bold,
+                                                color = GoldAccent
                                             )
                                             Text(
                                                 text = userEmail,
@@ -212,30 +251,73 @@ fun TopHeader(
                                     onClick = { },
                                     enabled = false
                                 )
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Logout,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "Sign Out",
+                                                color = MaterialTheme.colorScheme.error,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        userMenuExpanded = false
+                                        onSignOut()
+                                    },
+                                    modifier = Modifier.testTag("button_sign_out")
+                                )
+                            } else {
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(
+                                                text = "Viewer Mode (Live)",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "Real-time updates enabled",
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    },
+                                    onClick = { },
+                                    enabled = false
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Login,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "Sign in as Admin",
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        userMenuExpanded = false
+                                        onSignInRequest()
+                                    },
+                                    modifier = Modifier.testTag("button_menu_admin_sign_in")
+                                )
                             }
-                            DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.Logout,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Sign Out",
-                                            color = MaterialTheme.colorScheme.error,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-                                },
-                                onClick = {
-                                    userMenuExpanded = false
-                                    onSignOut()
-                                },
-                                modifier = Modifier.testTag("button_sign_out")
-                            )
                         }
                     }
                 }

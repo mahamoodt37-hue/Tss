@@ -12,12 +12,16 @@ import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.snapshots
+import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -87,6 +91,15 @@ class FirestoreRepository(
 
     private val auth = Firebase.auth
 
+    val authFlow: Flow<FirebaseUser?> = callbackFlow {
+        val listener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { authState ->
+            trySend(authState.currentUser)
+        }
+        auth.addAuthStateListener(listener)
+        trySend(auth.currentUser)
+        awaitClose { auth.removeAuthStateListener(listener) }
+    }
+
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
@@ -97,136 +110,151 @@ class FirestoreRepository(
             ?: throw IllegalStateException("User must be signed in with Google before accessing Firestore.")
     }
 
-    fun observeMembers(): Flow<List<Member>> = flow {
-        if (auth.currentUser == null) {
-            emit(emptyList())
-            return@flow
-        }
+    fun observeMembers(): Flow<List<Member>> {
         val path = "members"
-        emitAll(
-            db.collection(path)
-                .snapshots()
-                .map { snapshot ->
-                    snapshot.documents.mapNotNull { doc ->
-                        try {
-                            doc.toObject(FirestoreMember::class.java)?.toDomainModel()
-                        } catch (e: Exception) {
-                            Log.e("FirestoreRepo", "Failed to deserialize member ${doc.id}", e)
-                            null
-                        }
-                    }.sortedBy { it.id }
-                }
-                .catch { error ->
-                    val firestoreError = generateSequence(error) { it.cause }
-                        .filterIsInstance<FirebaseFirestoreException>()
-                        .firstOrNull()
-                    if (firestoreError == null && error is CancellationException) throw error
-                    val exceptionToLog = firestoreError ?: (error as? Exception)
-                    if (exceptionToLog != null && auth.currentUser != null) {
-                        handleFirestoreError(exceptionToLog, OperationType.LIST, path)
+        return db.collection(path)
+            .snapshots()
+            .map { snapshot ->
+                snapshot.documents.mapNotNull { doc ->
+                    try {
+                        val id = (doc.get("id") as? Number)?.toLong()
+                            ?: doc.id.removePrefix("member_").toLongOrNull()
+                            ?: return@mapNotNull null
+                        val name = doc.getString("name").orEmpty()
+                        val emirateOrCity = doc.getString("emirateOrCity").orEmpty()
+                        val country = doc.getString("country").orEmpty()
+                        val mobile = doc.getString("mobile").orEmpty()
+                        val allottedMonth = doc.getString("allottedMonth")?.trim()?.uppercase().orEmpty().ifBlank { "ALL" }
+                        val amount = (doc.get("amount") as? Number)?.toDouble() ?: 0.0
+                        val currency = doc.getString("currency")?.trim()?.uppercase().orEmpty().ifBlank { "AED" }
+                        Member(
+                            id = id,
+                            name = name,
+                            emirateOrCity = emirateOrCity,
+                            country = country,
+                            mobile = mobile,
+                            allottedMonth = allottedMonth,
+                            amount = amount,
+                            currency = currency
+                        )
+                    } catch (e: Exception) {
+                        Log.e("FirestoreRepo", "Failed to deserialize member ${doc.id}", e)
+                        null
                     }
-                    throw error
-                }
-        )
+                }.sortedBy { it.id }
+            }
+            .catch { error ->
+                Log.e("FirestoreRepo", "Error observing members: ${error.message}")
+                emit(emptyList())
+            }
     }
 
-    fun observePayments(): Flow<List<PaymentRecord>> = flow {
-        if (auth.currentUser == null) {
-            emit(emptyList())
-            return@flow
-        }
+    fun observePayments(): Flow<List<PaymentRecord>> {
         val path = "payments"
-        emitAll(
-            db.collection(path)
-                .snapshots()
-                .map { snapshot ->
-                    snapshot.documents.mapNotNull { doc ->
-                        try {
-                            doc.toObject(FirestorePayment::class.java)?.toDomainModel()
-                        } catch (e: Exception) {
-                            Log.e("FirestoreRepo", "Failed to deserialize payment ${doc.id}", e)
-                            null
-                        }
+        return db.collection(path)
+            .snapshots()
+            .map { snapshot ->
+                snapshot.documents.mapNotNull { doc ->
+                    try {
+                        val memberId = (doc.get("memberId") as? Number)?.toLong()
+                            ?: doc.id.substringBefore("_").toLongOrNull()
+                            ?: return@mapNotNull null
+                        val monthIndex = (doc.get("monthIndex") as? Number)?.toInt()
+                            ?: doc.id.substringAfter("_").toIntOrNull()
+                            ?: 0
+                        val isPaid = doc.getBoolean("isPaid") ?: false
+                        val isPending = doc.getBoolean("isPending") ?: false
+                        val heldBy = doc.getString("heldBy")?.trim().orEmpty().ifBlank { "Main" }
+                        val amount = (doc.get("amount") as? Number)?.toDouble() ?: 0.0
+                        val currency = doc.getString("currency")?.trim()?.uppercase().orEmpty().ifBlank { "AED" }
+                        val timestamp = (doc.get("timestamp") as? Number)?.toLong() ?: System.currentTimeMillis()
+
+                        PaymentRecord(
+                            memberId = memberId,
+                            monthIndex = monthIndex,
+                            isPaid = isPaid,
+                            isPending = isPending,
+                            heldBy = heldBy,
+                            amount = amount,
+                            currency = currency,
+                            timestamp = timestamp
+                        )
+                    } catch (e: Exception) {
+                        Log.e("FirestoreRepo", "Failed to deserialize payment ${doc.id}", e)
+                        null
                     }
                 }
-                .catch { error ->
-                    val firestoreError = generateSequence(error) { it.cause }
-                        .filterIsInstance<FirebaseFirestoreException>()
-                        .firstOrNull()
-                    if (firestoreError == null && error is CancellationException) throw error
-                    val exceptionToLog = firestoreError ?: (error as? Exception)
-                    if (exceptionToLog != null && auth.currentUser != null) {
-                        handleFirestoreError(exceptionToLog, OperationType.LIST, path)
-                    }
-                    throw error
-                }
-        )
+            }
+            .catch { error ->
+                Log.e("FirestoreRepo", "Error observing payments: ${error.message}")
+                emit(emptyList())
+            }
     }
 
-    fun observeTransfers(): Flow<List<TransferRecord>> = flow {
-        if (auth.currentUser == null) {
-            emit(emptyList())
-            return@flow
-        }
+    fun observeTransfers(): Flow<List<TransferRecord>> {
         val path = "transfers"
-        emitAll(
-            db.collection(path)
-                .snapshots()
-                .map { snapshot ->
-                    snapshot.documents.mapNotNull { doc ->
-                        try {
-                            doc.toObject(FirestoreTransfer::class.java)?.toDomainModel()
-                        } catch (e: Exception) {
-                            Log.e("FirestoreRepo", "Failed to deserialize transfer ${doc.id}", e)
-                            null
-                        }
+        return db.collection(path)
+            .snapshots()
+            .map { snapshot ->
+                snapshot.documents.mapNotNull { doc ->
+                    try {
+                        val holderName = doc.getString("holderName").orEmpty()
+                        val currency = doc.getString("currency")?.trim()?.uppercase().orEmpty().ifBlank { "AED" }
+                        val amount = (doc.get("amount") as? Number)?.toDouble() ?: 0.0
+                        val date = doc.getString("date").orEmpty()
+                        TransferRecord(
+                            id = 0,
+                            holderName = holderName,
+                            currency = currency,
+                            amount = amount,
+                            date = date
+                        )
+                    } catch (e: Exception) {
+                        Log.e("FirestoreRepo", "Failed to deserialize transfer ${doc.id}", e)
+                        null
                     }
                 }
-                .catch { error ->
-                    val firestoreError = generateSequence(error) { it.cause }
-                        .filterIsInstance<FirebaseFirestoreException>()
-                        .firstOrNull()
-                    if (firestoreError == null && error is CancellationException) throw error
-                    val exceptionToLog = firestoreError ?: (error as? Exception)
-                    if (exceptionToLog != null && auth.currentUser != null) {
-                        handleFirestoreError(exceptionToLog, OperationType.LIST, path)
-                    }
-                    throw error
-                }
-        )
+            }
+            .catch { error ->
+                Log.e("FirestoreRepo", "Error observing transfers: ${error.message}")
+                emit(emptyList())
+            }
     }
 
-    fun observeExtraCollections(): Flow<List<ExtraCollection>> = flow {
-        if (auth.currentUser == null) {
-            emit(emptyList())
-            return@flow
-        }
+    fun observeExtraCollections(): Flow<List<ExtraCollection>> {
         val path = "extra_collections"
-        emitAll(
-            db.collection(path)
-                .snapshots()
-                .map { snapshot ->
-                    snapshot.documents.mapNotNull { doc ->
-                        try {
-                            doc.toObject(FirestoreExtra::class.java)?.toDomainModel()
-                        } catch (e: Exception) {
-                            Log.e("FirestoreRepo", "Failed to deserialize extra collection ${doc.id}", e)
-                            null
-                        }
+        return db.collection(path)
+            .snapshots()
+            .map { snapshot ->
+                snapshot.documents.mapNotNull { doc ->
+                    try {
+                        val name = doc.getString("name").orEmpty()
+                        val mobile = doc.getString("mobile").orEmpty()
+                        val purpose = doc.getString("purpose").orEmpty()
+                        val amount = (doc.get("amount") as? Number)?.toDouble() ?: 0.0
+                        val currency = doc.getString("currency")?.trim()?.uppercase().orEmpty().ifBlank { "AED" }
+                        val heldBy = doc.getString("heldBy")?.trim().orEmpty().ifBlank { "Main" }
+                        val date = doc.getString("date").orEmpty()
+                        ExtraCollection(
+                            id = 0,
+                            name = name,
+                            mobile = mobile,
+                            purpose = purpose,
+                            amount = amount,
+                            currency = currency,
+                            heldBy = heldBy,
+                            date = date
+                        )
+                    } catch (e: Exception) {
+                        Log.e("FirestoreRepo", "Failed to deserialize extra collection ${doc.id}", e)
+                        null
                     }
                 }
-                .catch { error ->
-                    val firestoreError = generateSequence(error) { it.cause }
-                        .filterIsInstance<FirebaseFirestoreException>()
-                        .firstOrNull()
-                    if (firestoreError == null && error is CancellationException) throw error
-                    val exceptionToLog = firestoreError ?: (error as? Exception)
-                    if (exceptionToLog != null && auth.currentUser != null) {
-                        handleFirestoreError(exceptionToLog, OperationType.LIST, path)
-                    }
-                    throw error
-                }
-        )
+            }
+            .catch { error ->
+                Log.e("FirestoreRepo", "Error observing extra collections: ${error.message}")
+                emit(emptyList())
+            }
     }
 
     suspend fun seedInitialMembersIfEmpty(initialMembers: List<Member>) = withContext(Dispatchers.IO) {

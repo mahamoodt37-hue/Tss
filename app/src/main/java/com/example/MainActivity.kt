@@ -1,6 +1,7 @@
 package com.example
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -10,7 +11,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -18,8 +18,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.credentials.CredentialManager
-import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.MainAppScaffold
+import com.example.ui.screens.onGoogleSignInClicked
 import com.example.ui.screens.signOut
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.TssViewModel
@@ -60,28 +60,31 @@ fun AppContent(viewModel: TssViewModel) {
         }
     }
 
-    if (currentUser == null) {
-        AuthScreen(
-            onAuthSuccess = {
-                currentUser = Firebase.auth.currentUser
-            }
-        )
-    } else {
-        val uid = currentUser!!.uid
-        key(uid) {
-            MainAppScaffold(
-                viewModel = viewModel,
-                userEmail = currentUser?.email ?: "User",
-                onSignOut = {
-                    signOut(
-                        credentialManager = credentialManager,
-                        scope = coroutineScope,
-                        onSignOutComplete = {
-                            currentUser = null
-                        }
-                    )
+    MainAppScaffold(
+        viewModel = viewModel,
+        userEmail = currentUser?.email,
+        isAdmin = currentUser != null,
+        onSignInRequest = {
+            onGoogleSignInClicked(
+                context = context,
+                credentialManager = credentialManager,
+                onAuthSuccess = {
+                    currentUser = Firebase.auth.currentUser
+                },
+                onAuthError = { err ->
+                    Log.e("MainActivity", "Admin sign-in failed: $err")
+                },
+                scope = coroutineScope
+            )
+        },
+        onSignOut = {
+            signOut(
+                credentialManager = credentialManager,
+                scope = coroutineScope,
+                onSignOutComplete = {
+                    currentUser = null
                 }
             )
         }
-    }
+    )
 }

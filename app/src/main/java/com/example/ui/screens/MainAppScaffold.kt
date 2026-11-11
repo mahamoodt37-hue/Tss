@@ -21,13 +21,19 @@ import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Login
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,6 +58,7 @@ import com.example.ui.components.MemberActionDialog
 import com.example.ui.components.PaymentStatusUpdateDialog
 import com.example.ui.components.TopHeader
 import com.example.ui.components.TransferDialog
+import com.example.ui.theme.GoldAccent
 import com.example.ui.viewmodel.MemberPaymentStatus
 import com.example.ui.viewmodel.MemberWithStatus
 import com.example.ui.viewmodel.TssViewModel
@@ -66,6 +74,8 @@ data class PaymentUpdateTarget(
 fun MainAppScaffold(
     viewModel: TssViewModel,
     userEmail: String? = null,
+    isAdmin: Boolean = !userEmail.isNullOrBlank(),
+    onSignInRequest: () -> Unit = {},
     onSignOut: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -78,6 +88,7 @@ fun MainAppScaffold(
     var selectedMemberForAction by remember { mutableStateOf<MemberWithStatus?>(null) }
     var paymentUpdateTarget by remember { mutableStateOf<PaymentUpdateTarget?>(null) }
     var isNewMemberDialogOpen by remember { mutableStateOf(false) }
+    var showAdminRequiredDialog by remember { mutableStateOf(false) }
 
     var transferDialogState by remember {
         mutableStateOf<Triple<String, String, Double>?>(null) // holder, cur, amount
@@ -145,6 +156,7 @@ fun MainAppScaffold(
                     onOpenSheetDialog = { isSheetDialogOpen = true },
                     isSheetLinked = uiState.googleSheetUrl.isNotBlank(),
                     userEmail = userEmail,
+                    onSignInRequest = onSignInRequest,
                     onSignOut = onSignOut
                 )
             }
@@ -211,10 +223,20 @@ fun MainAppScaffold(
                             onOpenSheetDialog = { isSheetDialogOpen = true },
                             onExportCsv = { viewModel.generateCsvAndShare(context) },
                             onInitiateTransfer = { holder, cur, amount ->
-                                transferDialogState = Triple(holder, cur, amount)
+                                if (isAdmin) {
+                                    transferDialogState = Triple(holder, cur, amount)
+                                } else {
+                                    showAdminRequiredDialog = true
+                                }
                             },
                             onNavigateToTab = { viewModel.setTab(it) },
-                            onAddNewMember = { isNewMemberDialogOpen = true }
+                            onAddNewMember = {
+                                if (isAdmin) {
+                                    isNewMemberDialogOpen = true
+                                } else {
+                                    showAdminRequiredDialog = true
+                                }
+                            }
                         )
                     }
 
@@ -225,17 +247,31 @@ fun MainAppScaffold(
                             onFilterChange = { viewModel.setFilterStatus(it) },
                             onToggleShowAllMonths = { viewModel.toggleShowAllMonths(it) },
                             onMemberClick = { selectedMemberForHistory = it },
-                            onAddNewMember = { isNewMemberDialogOpen = true },
+                            onAddNewMember = {
+                                if (isAdmin) {
+                                    isNewMemberDialogOpen = true
+                                } else {
+                                    showAdminRequiredDialog = true
+                                }
+                            },
                             onTogglePaidStatus = { item ->
-                                paymentUpdateTarget = PaymentUpdateTarget(
-                                    member = item.member,
-                                    monthIndex = uiState.selectedMonthIndex,
-                                    currentStatus = item.status,
-                                    currentHeldBy = item.heldBy
-                                )
+                                if (isAdmin) {
+                                    paymentUpdateTarget = PaymentUpdateTarget(
+                                        member = item.member,
+                                        monthIndex = uiState.selectedMonthIndex,
+                                        currentStatus = item.status,
+                                        currentHeldBy = item.heldBy
+                                    )
+                                } else {
+                                    showAdminRequiredDialog = true
+                                }
                             },
                             onChangeAllottedMonth = { item, newMonth ->
-                                viewModel.updateMemberAllottedMonth(item.member.id, newMonth)
+                                if (isAdmin) {
+                                    viewModel.updateMemberAllottedMonth(item.member.id, newMonth)
+                                } else {
+                                    showAdminRequiredDialog = true
+                                }
                             }
                         )
                     }
@@ -245,7 +281,11 @@ fun MainAppScaffold(
                             uiState = uiState,
                             transfers = transfers,
                             onInitiateTransfer = { holder, cur, amount ->
-                                transferDialogState = Triple(holder, cur, amount)
+                                if (isAdmin) {
+                                    transferDialogState = Triple(holder, cur, amount)
+                                } else {
+                                    showAdminRequiredDialog = true
+                                }
                             }
                         )
                     }
@@ -255,26 +295,88 @@ fun MainAppScaffold(
                             uiState = uiState,
                             extraCollections = extraCollections,
                             onAddExtra = { name, mobile, purpose, amount, cur, heldBy ->
-                                viewModel.addExtraCollection(name, mobile, purpose, amount, cur, heldBy)
+                                if (isAdmin) {
+                                    viewModel.addExtraCollection(name, mobile, purpose, amount, cur, heldBy)
+                                } else {
+                                    showAdminRequiredDialog = true
+                                }
                             },
-                            onAddNewMember = { isNewMemberDialogOpen = true },
+                            onAddNewMember = {
+                                if (isAdmin) {
+                                    isNewMemberDialogOpen = true
+                                } else {
+                                    showAdminRequiredDialog = true
+                                }
+                            },
                             onMemberClick = { selectedMemberForHistory = it },
                             onTogglePaidStatus = { item ->
-                                paymentUpdateTarget = PaymentUpdateTarget(
-                                    member = item.member,
-                                    monthIndex = uiState.selectedMonthIndex,
-                                    currentStatus = item.status,
-                                    currentHeldBy = item.heldBy
-                                )
+                                if (isAdmin) {
+                                    paymentUpdateTarget = PaymentUpdateTarget(
+                                        member = item.member,
+                                        monthIndex = uiState.selectedMonthIndex,
+                                        currentStatus = item.status,
+                                        currentHeldBy = item.heldBy
+                                    )
+                                } else {
+                                    showAdminRequiredDialog = true
+                                }
                             },
                             onChangeAllottedMonth = { item, newMonth ->
-                                viewModel.updateMemberAllottedMonth(item.member.id, newMonth)
+                                if (isAdmin) {
+                                    viewModel.updateMemberAllottedMonth(item.member.id, newMonth)
+                                } else {
+                                    showAdminRequiredDialog = true
+                                }
                             }
                         )
                     }
                 }
             }
         }
+    }
+
+    // Admin Access Required Dialog (friendly prompt for viewers)
+    if (showAdminRequiredDialog) {
+        AlertDialog(
+            onDismissRequest = { showAdminRequiredDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = GoldAccent,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Admin Access Required", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                }
+            },
+            text = {
+                Text(
+                    "Only authorized admins can mark payments, change member months, or add transactions.\n\nSign in with your Google account to enable Admin editing.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showAdminRequiredDialog = false
+                        onSignInRequest()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(Icons.Default.Login, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Sign in with Google", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showAdminRequiredDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     // Contribution History Modal
@@ -286,16 +388,24 @@ fun MainAppScaffold(
             allPayments = uiState.allPayments,
             onDismiss = { selectedMemberForHistory = null },
             onRequestUpdatePayment = { monthIndex, currentStatus, currentHeldBy ->
-                paymentUpdateTarget = PaymentUpdateTarget(
-                    member = liveMember.member,
-                    monthIndex = monthIndex,
-                    currentStatus = currentStatus,
-                    currentHeldBy = currentHeldBy
-                )
+                if (isAdmin) {
+                    paymentUpdateTarget = PaymentUpdateTarget(
+                        member = liveMember.member,
+                        monthIndex = monthIndex,
+                        currentStatus = currentStatus,
+                        currentHeldBy = currentHeldBy
+                    )
+                } else {
+                    showAdminRequiredDialog = true
+                }
             },
             onEditMember = { memberToEdit ->
-                selectedMemberForHistory = null
-                selectedMemberForAction = liveMember.copy(member = memberToEdit)
+                if (isAdmin) {
+                    selectedMemberForHistory = null
+                    selectedMemberForAction = liveMember.copy(member = memberToEdit)
+                } else {
+                    showAdminRequiredDialog = true
+                }
             }
         )
     }
