@@ -51,9 +51,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.text.style.TextOverflow
 import com.example.ui.theme.EmeraldMidnight
 import com.example.ui.theme.GoldAccent
 import com.example.ui.theme.GoldGlow
+import com.example.ui.theme.MintAccent
 import com.example.ui.theme.TealDark
 import com.example.ui.viewmodel.MONTHS
 
@@ -101,7 +104,7 @@ fun TopHeader(
                     // Organization Emblem with luxury golden rim
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(40.dp)
                             .clip(CircleShape)
                             .border(1.5.dp, GoldAccent.copy(alpha = 0.6f), CircleShape)
                             .background(Color.White.copy(alpha = 0.12f))
@@ -113,85 +116,125 @@ fun TopHeader(
                             contentDescription = "TSS Emblem",
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
-                                .size(40.dp)
+                                .size(36.dp)
                                 .clip(CircleShape)
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Thajusunna Pilathara",
-                            fontSize = 17.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
-                            letterSpacing = 0.2.sp
+                            letterSpacing = 0.2.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             Box(
                                 modifier = Modifier
-                                    .size(6.dp)
+                                    .size(5.dp)
                                     .clip(CircleShape)
                                     .background(GoldAccent)
                             )
-                            Spacer(modifier = Modifier.width(5.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "Monthly Fund Collection · 2026",
                                 fontSize = 11.sp,
-                                color = Color.White.copy(alpha = 0.85f),
-                                fontWeight = FontWeight.Medium
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(modifier = Modifier.width(6.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
                     // Viewer / Admin status pill
                     if (userEmail.isNullOrBlank()) {
                         Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = GoldAccent.copy(alpha = 0.2f),
-                            border = CardDefaults.outlinedCardBorder().copy(brush = Brush.horizontalGradient(listOf(GoldAccent, GoldGlow))),
+                            shape = RoundedCornerShape(16.dp),
+                            color = GoldAccent.copy(alpha = 0.22f),
+                            border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.6f)),
                             modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
+                                .clip(RoundedCornerShape(16.dp))
                                 .clickable { onSignInRequest() }
                                 .testTag("button_admin_login_pill")
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Lock,
                                     contentDescription = null,
                                     tint = GoldAccent,
-                                    modifier = Modifier.size(12.dp)
+                                    modifier = Modifier.size(11.dp)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
                                 Text(
-                                    text = "Admin Login",
-                                    fontSize = 11.sp,
+                                    text = "Admin",
+                                    fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.width(4.dp))
+                    } else {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MintAccent.copy(alpha = 0.2f),
+                            border = BorderStroke(1.dp, MintAccent.copy(alpha = 0.5f)),
+                            modifier = Modifier.clip(RoundedCornerShape(16.dp))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(MintAccent)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "Admin",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MintAccent
+                                )
+                            }
+                        }
                     }
 
                     // Google Sheet sync button
                     IconButton(
                         onClick = onOpenSheetDialog,
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(32.dp)
                             .testTag("button_open_sheet")
                     ) {
                         Icon(
                             imageVector = if (isSheetLinked) Icons.Default.CloudDone else Icons.Default.CloudSync,
                             contentDescription = "Google Sheet Sync",
                             tint = if (isSheetLinked) Color(0xFF6EE7B7) else Color.White.copy(alpha = 0.85f),
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
@@ -199,14 +242,14 @@ fun TopHeader(
                     IconButton(
                         onClick = onShareCsv,
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(32.dp)
                             .testTag("button_share_csv")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Share,
                             contentDescription = "Export and Share CSV",
                             tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
@@ -215,14 +258,14 @@ fun TopHeader(
                         IconButton(
                             onClick = { userMenuExpanded = true },
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(32.dp)
                                 .testTag("button_user_menu")
                         ) {
                             Icon(
                                 imageVector = Icons.Default.AccountCircle,
                                 contentDescription = "User Account",
-                                tint = if (!userEmail.isNullOrBlank()) GoldAccent else Color.White.copy(alpha = 0.8f),
-                                modifier = Modifier.size(22.dp)
+                                tint = if (!userEmail.isNullOrBlank()) GoldAccent else Color.White.copy(alpha = 0.85f),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
