@@ -50,6 +50,7 @@ data class TssUiState(
     val inrBalance: CurrencyBalance = CurrencyBalance(),
     val monthStats: MonthCollectionStats = MonthCollectionStats(),
     val membersWithStatus: List<MemberWithStatus> = emptyList(),
+    val allMembers: List<Member> = emptyList(),
     val allPayments: List<PaymentRecord> = emptyList(),
     val knownHolders: List<String> = listOf("Main"),
     val googleSheetUrl: String = "",

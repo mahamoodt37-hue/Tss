@@ -3,6 +3,11 @@ package com.example.ui.viewmodel
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
@@ -372,6 +377,7 @@ class TssViewModel(application: Application) : AndroidViewModel(application) {
             inrBalance = inrBal,
             monthStats = monthStats,
             membersWithStatus = filteredMembers,
+            allMembers = members,
             allPayments = payments,
             knownHolders = holderSet.toList(),
             googleSheetUrl = sync.sheetUrl,
@@ -689,4 +695,372 @@ class TssViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    fun shareMembersAsText(context: Context) {
+        val currentState = uiState.value
+        val members = currentState.membersWithStatus
+        val cur = currentState.selectedCurrency
+        val isAll = currentState.showAllMonthsMembers || currentState.searchQuery.isNotBlank()
+        val monthName = MONTHS.getOrElse(currentState.selectedMonthIndex) { "NOV" }
+        val title = if (isAll) {
+            "TSS Fund - Full member list ($cur)"
+        } else {
+            "TSS Fund - $monthName 2026 ($cur)"
+        }
+
+        val rows = members.map { m ->
+            val s = m.status.label
+            val statusLabel = if (s.equals("Inprogress", ignoreCase = true)) "In progress" else s
+            MemberShareRow(
+                name = m.member.name,
+                mobile = m.member.mobile.ifBlank { "no number" },
+                amount = if (cur == "AED") "AED ${m.member.amount}" else "₹ ${m.member.amount}",
+                month = m.member.allottedMonth,
+                status = statusLabel
+            )
+        }
+        val total = members.sumOf { it.member.amount }
+        val totalFormatted = if (cur == "AED") "AED $total" else "₹ $total"
+
+        val textContent = "*$title*\n\n" +
+            rows.mapIndexed { index, r ->
+                "${index + 1}. ${r.name} - ${r.mobile} - ${r.amount} - ${if (isAll) "Month " + r.month else r.status}"
+            }.joinToString("\n") +
+            "\n\n*Total: $totalFormatted*"
+
+        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, title)
+            putExtra(Intent.EXTRA_TEXT, textContent)
+        }
+
+        val waIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            setPackage("com.whatsapp")
+            putExtra(Intent.EXTRA_TEXT, textContent)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
+        try {
+            context.startActivity(waIntent)
+        } catch (e: Exception) {
+            val chooser = Intent.createChooser(sendIntent, "Share member list")
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(chooser)
+        }
+    }
+
+    fun shareMembersAsImage(context: Context) {
+        val currentState = uiState.value
+        val members = currentState.membersWithStatus
+        val cur = currentState.selectedCurrency
+        val isAll = currentState.showAllMonthsMembers || currentState.searchQuery.isNotBlank()
+        val monthName = MONTHS.getOrElse(currentState.selectedMonthIndex) { "NOV" }
+        val title = if (isAll) {
+            "TSS Fund - Full member list ($cur)"
+        } else {
+            "TSS Fund - $monthName 2026 ($cur)"
+        }
+
+        val rows = members.map { m ->
+            val s = m.status.label
+            val statusLabel = if (s.equals("Inprogress", ignoreCase = true)) "In progress" else s
+            MemberShareRow(
+                name = m.member.name,
+                mobile = m.member.mobile.ifBlank { "no number" },
+                amount = if (cur == "AED") "AED ${m.member.amount}" else "₹ ${m.member.amount}",
+                month = m.member.allottedMonth,
+                status = statusLabel
+            )
+        }
+        val total = members.sumOf { it.member.amount }
+        val totalFormatted = if (cur == "AED") "AED $total" else "₹ $total"
+
+        // Dimensions: W=720, H=124 + rows.length * 54
+        val width = 720
+        val rowHeight = 54
+        val headerHeight = 64
+        val height = (124 + rows.size * rowHeight).coerceAtLeast(180)
+
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        // Background: #ffffff
+        canvas.drawColor(Color.WHITE)
+
+        // Header: #0f766e
+        val headerPaint = Paint().apply {
+            color = Color.parseColor("#0f766e")
+            style = Paint.Style.FILL
+        }
+        canvas.drawRect(0f, 0f, width.toFloat(), headerHeight.toFloat(), headerPaint)
+
+        // Title text: bold 24px white at (16, 40)
+        val headerTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = 24f
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            textAlign = Paint.Align.LEFT
+        }
+        canvas.drawText(title, 16f, 40f, headerTextPaint)
+
+        // Zebra background: #f3f6f4
+        val zebraPaint = Paint().apply {
+            color = Color.parseColor("#f3f6f4")
+            style = Paint.Style.FILL
+        }
+
+        val namePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#14231c")
+            textSize = 20f
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            textAlign = Paint.Align.LEFT
+        }
+
+        val subPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#66776e")
+            textSize = 16f
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+            textAlign = Paint.Align.LEFT
+        }
+
+        val amountPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#14231c")
+            textSize = 20f
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            textAlign = Paint.Align.RIGHT
+        }
+
+        rows.forEachIndexed { i, r ->
+            val y = headerHeight.toFloat() + i * rowHeight.toFloat()
+            if (i % 2 != 0) {
+                canvas.drawRect(0f, y, width.toFloat(), y + rowHeight.toFloat(), zebraPaint)
+            }
+
+            // Amount text width to prevent overlap
+            val amountWidth = amountPaint.measureText(r.amount)
+            val maxNameWidth = width.toFloat() - 32f - amountWidth - 16f
+
+            var nameText = "${i + 1}. ${r.name}"
+            if (namePaint.measureText(nameText) > maxNameWidth) {
+                var truncated = r.name
+                while (truncated.isNotEmpty() && namePaint.measureText("${i + 1}. $truncated...") > maxNameWidth) {
+                    truncated = truncated.dropLast(1)
+                }
+                nameText = "${i + 1}. $truncated..."
+            }
+
+            // Name at y + 24
+            canvas.drawText(nameText, 16f, y + 24f, namePaint)
+
+            // Subtitle: mobile · (month or status) at y + 46
+            val subText = "${r.mobile} · ${if (isAll) "Month " + r.month else r.status}"
+            canvas.drawText(subText, 16f, y + 46f, subPaint)
+
+            // Amount right-aligned at width - 16, y + 32
+            canvas.drawText(r.amount, (width - 16).toFloat(), y + 32f, amountPaint)
+        }
+
+        // Footer Total: bold 22px #0f766e at (16, H - 24)
+        val footerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#0f766e")
+            textSize = 22f
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            textAlign = Paint.Align.LEFT
+        }
+        canvas.drawText("Total: $totalFormatted", 16f, (height - 24).toFloat(), footerPaint)
+
+        try {
+            val cacheDir = File(context.cacheDir, "exports")
+            cacheDir.mkdirs()
+            val file = File(cacheDir, "tss-list.png")
+            file.outputStream().use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "image/png"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, title)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val chooser = Intent.createChooser(shareIntent, "Share member list image")
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(chooser)
+        } catch (e: Exception) {
+            Log.e("TssViewModel", "Failed to share image: ${e.message}", e)
+        }
+    }
+
+    fun shareFullDirectoryText(context: Context, members: List<Member>) {
+        val title = "Thajusunna Pilathara (TSS) - Full Members Directory"
+        val rows = members.mapIndexed { index, m ->
+            val phone = if (m.mobile.isNotBlank()) m.mobile else "no number"
+            val amt = if (m.currency == "AED") "AED ${m.amount.toLong()}" else "₹ ${m.amount.toLong()}"
+            val place = listOf(m.emirateOrCity, m.country).filter { it.isNotBlank() }.joinToString(", ")
+            val loc = if (place.isNotBlank()) " ($place)" else ""
+            "${index + 1}. ${m.name} - $phone - $amt - Month: ${m.allottedMonth}$loc"
+        }
+        val aedTotal = members.filter { it.currency == "AED" }.sumOf { it.amount.toLong() }
+        val inrTotal = members.filter { it.currency == "INR" }.sumOf { it.amount.toLong() }
+        val footer = "*Total Members: ${members.size}*\n*Total AED: AED $aedTotal · Total INR: ₹ $inrTotal*"
+
+        val textContent = "*$title*\n\n" + rows.joinToString("\n") + "\n\n$footer"
+
+        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, title)
+            putExtra(Intent.EXTRA_TEXT, textContent)
+        }
+
+        val waIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            setPackage("com.whatsapp")
+            putExtra(Intent.EXTRA_TEXT, textContent)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
+        try {
+            context.startActivity(waIntent)
+        } catch (e: Exception) {
+            val chooser = Intent.createChooser(sendIntent, "Share Members Directory")
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(chooser)
+        }
+    }
+
+    fun shareFullDirectoryImage(context: Context, members: List<Member>) {
+        val title = "TSS Fund - Full Members Directory"
+        val width = 720
+        val rowHeight = 56
+        val headerHeight = 70
+        val footerHeight = 60
+        val height = (headerHeight + footerHeight + members.size * rowHeight).coerceAtLeast(200)
+
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.WHITE)
+
+        val headerPaint = Paint().apply {
+            color = Color.parseColor("#0f766e")
+            style = Paint.Style.FILL
+        }
+        canvas.drawRect(0f, 0f, width.toFloat(), headerHeight.toFloat(), headerPaint)
+
+        val headerTitlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = 22f
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            textAlign = Paint.Align.LEFT
+        }
+        canvas.drawText(title, 16f, 32f, headerTitlePaint)
+
+        val aedTotal = members.filter { it.currency == "AED" }.sumOf { it.amount.toLong() }
+        val inrTotal = members.filter { it.currency == "INR" }.sumOf { it.amount.toLong() }
+
+        val headerSubPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#d1fae5")
+            textSize = 14f
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+            textAlign = Paint.Align.LEFT
+        }
+        canvas.drawText("${members.size} Members · Total AED $aedTotal · Total INR ₹ $inrTotal", 16f, 54f, headerSubPaint)
+
+        val zebraPaint = Paint().apply {
+            color = Color.parseColor("#f8fafc")
+            style = Paint.Style.FILL
+        }
+
+        val namePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#0f172a")
+            textSize = 18f
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            textAlign = Paint.Align.LEFT
+        }
+
+        val subPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#64748b")
+            textSize = 14f
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+            textAlign = Paint.Align.LEFT
+        }
+
+        val amountPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#0f766e")
+            textSize = 18f
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            textAlign = Paint.Align.RIGHT
+        }
+
+        members.forEachIndexed { i, m ->
+            val y = headerHeight.toFloat() + i * rowHeight.toFloat()
+            if (i % 2 != 0) {
+                canvas.drawRect(0f, y, width.toFloat(), y + rowHeight.toFloat(), zebraPaint)
+            }
+            val amtText = if (m.currency == "AED") "AED ${m.amount.toLong()}" else "₹ ${m.amount.toLong()}"
+            val amtWidth = amountPaint.measureText(amtText)
+            val maxNameWidth = width.toFloat() - 32f - amtWidth - 20f
+
+            var nameText = "${i + 1}. ${m.name}"
+            if (namePaint.measureText(nameText) > maxNameWidth) {
+                var truncated = m.name
+                while (truncated.isNotEmpty() && namePaint.measureText("${i + 1}. $truncated...") > maxNameWidth) {
+                    truncated = truncated.dropLast(1)
+                }
+                nameText = "${i + 1}. $truncated..."
+            }
+
+            canvas.drawText(nameText, 16f, y + 24f, namePaint)
+
+            val phone = if (m.mobile.isNotBlank()) m.mobile else "no number"
+            val place = listOf(m.emirateOrCity, m.country).filter { it.isNotBlank() }.joinToString(", ")
+            val loc = if (place.isNotBlank()) " · $place" else ""
+            val subText = "$phone · Month: ${m.allottedMonth}$loc"
+            canvas.drawText(subText, 16f, y + 46f, subPaint)
+
+            canvas.drawText(amtText, (width - 16).toFloat(), y + 32f, amountPaint)
+        }
+
+        val footerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#0f766e")
+            textSize = 16f
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            textAlign = Paint.Align.LEFT
+        }
+        canvas.drawText("Thajusunna Pilathara (TSS) Gulf Committee · 2026", 16f, (height - 22).toFloat(), footerPaint)
+
+        try {
+            val cacheDir = File(context.cacheDir, "exports")
+            cacheDir.mkdirs()
+            val file = File(cacheDir, "tss-directory.png")
+            file.outputStream().use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "image/png"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, title)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val chooser = Intent.createChooser(shareIntent, "Share Directory Image")
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(chooser)
+        } catch (e: Exception) {
+            Log.e("TssViewModel", "Failed to share directory image: ${e.message}", e)
+        }
+    }
 }
+
+private data class MemberShareRow(
+    val name: String,
+    val mobile: String,
+    val amount: String,
+    val month: String,
+    val status: String
+)
+

@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -19,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContactPhone
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
@@ -96,6 +98,10 @@ fun MainAppScaffold(
 
     var isSheetDialogOpen by remember { mutableStateOf(false) }
 
+    BackHandler(enabled = uiState.currentTab != "dashboard") {
+        viewModel.setTab("dashboard")
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -119,6 +125,14 @@ fun MainAppScaffold(
                     icon = { Icon(Icons.Default.People, contentDescription = "Members") },
                     label = { Text("Members") },
                     modifier = Modifier.testTag("nav_tab_members")
+                )
+
+                NavigationBarItem(
+                    selected = uiState.currentTab == "directory",
+                    onClick = { viewModel.setTab("directory") },
+                    icon = { Icon(Icons.Default.ContactPhone, contentDescription = "Full List") },
+                    label = { Text("Full List") },
+                    modifier = Modifier.testTag("nav_tab_directory")
                 )
 
                 NavigationBarItem(
@@ -272,6 +286,36 @@ fun MainAppScaffold(
                                 } else {
                                     showAdminRequiredDialog = true
                                 }
+                            },
+                            onShareText = { viewModel.shareMembersAsText(context) },
+                            onShareImage = { viewModel.shareMembersAsImage(context) }
+                        )
+                    }
+
+                    "directory" -> {
+                        FullMembersListScreen(
+                            uiState = uiState,
+                            isAdmin = isAdmin,
+                            onMemberClick = { member ->
+                                val mws = uiState.membersWithStatus.find { it.member.id == member.id }
+                                    ?: com.example.ui.viewmodel.MemberWithStatus(
+                                        member = member,
+                                        status = com.example.ui.viewmodel.MemberPaymentStatus.NOT_DUE
+                                    )
+                                selectedMemberForHistory = mws
+                            },
+                            onAddNewMember = {
+                                if (isAdmin) {
+                                    isNewMemberDialogOpen = true
+                                } else {
+                                    showAdminRequiredDialog = true
+                                }
+                            },
+                            onShareDirectoryText = { list ->
+                                viewModel.shareFullDirectoryText(context, list)
+                            },
+                            onShareDirectoryImage = { list ->
+                                viewModel.shareFullDirectoryImage(context, list)
                             }
                         )
                     }

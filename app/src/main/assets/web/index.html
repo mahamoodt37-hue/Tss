@@ -116,5 +116,75 @@
   <main id="v"></main>
   <nav id="nav"></nav>
   <dialog id="dlg"></dialog>
+  <script>
+    const MON = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+    let cur = "AED", mi = 10, tab = "a", q = "";
+    const S = {
+      M: [
+        {n:"Azeez KC",mo:"507607968",a:250,c:"AED",mn:"ALL",s:"Paid"},
+        {n:"Mohammed Ali AT",mo:"559336123",a:300,c:"AED",mn:"JAN",s:"Paid"},
+        {n:"Muujeeb KP",mo:"501527927",a:250,c:"AED",mn:"JAN",s:"Paid"},
+        {n:"Asharaf Haji",mo:"506733580",a:250,c:"AED",mn:"FEB",s:"Paid"},
+        {n:"Abdulla T",mo:"505714977",a:250,c:"AED",mn:"FEB",s:"Paid"},
+        {n:"Sidheeq Karipayi",mo:"",a:200,c:"AED",mn:"MAR",s:"Paid"},
+        {n:"Hakeem KP",mo:"547385365",a:600,c:"AED",mn:"MAR",s:"Paid"},
+        {n:"Kamarudheen Tp",mo:"556538992",a:400,c:"AED",mn:"MAR",s:"Paid"},
+        {n:"Majeed AT",mo:"508786447",a:250,c:"AED",mn:"APR",s:"Paid"},
+        {n:"Ashiq dhaher",mo:"",a:150,c:"AED",mn:"APR",s:"Paid"},
+        {n:"Jabir Kp",mo:"527931293",a:250,c:"AED",mn:"APR",s:"Paid"},
+        {n:"Fasil PS",mo:"552299263",a:250,c:"AED",mn:"APR",s:"Paid"},
+        {n:"Hashim KP",mo:"567877411",a:250,c:"AED",mn:"APR",s:"Paid"},
+        {n:"Hashm KC",mo:"9745807373",a:360,c:"AED",mn:"APR",s:"Paid"}
+      ]
+    };
+    function f(c,a){return c==="AED"?"AED "+a:"₹ "+a}
+    function st(m){return m.s||"Unpaid"}
+    function due(m){return m.mn==="ALL"||m.mn===MON[mi]}
+
+    function listData(){let L,t;const a=tab==="a",mt=m=>q?m.n.toLowerCase().includes(q.toLowerCase()):a||due(m);
+     L=S.M.filter(m=>m.c===cur&&mt(m));
+     if(a){L.sort((x,y)=>MON.indexOf(x.mn)-MON.indexOf(y.mn));t="TSS Fund - Full member list ("+cur+")"}
+     else t="TSS Fund - "+MON[mi]+" 2026 ("+cur+")";
+     const rows=L.map(m=>{const s=st(m);return{n:m.n,mo:m.mo||"no number",a:f(m.c,m.a),mn:m.mn,s:s==="Inprogress"?"In progress":s}});
+     return{t,rows,total:L.reduce((s,m)=>s+m.a,0)}}
+
+    function shareBtns(){return `<button style="background:#25d366;color:#fff;border:0" onclick="shareText()">WhatsApp</button><button onclick="shareImg()">Image</button>`}
+
+    function all(){const D=listData();return `<div class="card"><input placeholder="Search name, phone, month…" value="${q}" oninput="q=this.value;go(1)"><div class="gap" style="display:flex;align-items:center;gap:8px;margin-top:8px">${shareBtns()}<span class="m" style="margin-left:auto">${D.rows.length} members · Total ${f(cur,D.total)}</span></div></div><div class="card">`+
+     D.rows.map((r,i)=>`<div class="li"><div class="row"><b>${i+1}. ${r.n}</b><b style="color:var(--g)">${r.a}</b></div><div class="row m" style="margin-top:4px"><span style="display:flex;align-items:center;gap:6px">📞 ${r.mo !== "no number" ? `<a href="tel:${r.mo}" style="color:inherit;text-decoration:none;font-weight:600">${r.mo}</a> · <a href="https://wa.me/${r.mo}" target="_blank" style="color:#25d366;text-decoration:none;font-weight:700">Chat</a>` : `<span style="font-style:italic">no number</span>`}</span><span>Month: ${r.mn}</span></div></div>`).join("")+"</div>"}
+
+    function shareText(){const D=listData(),a=tab==="a";
+     const s="*"+D.t+"*\n\n"+D.rows.map((r,i)=>(i+1)+". "+r.n+" - "+r.mo+" - "+r.a+" - Month "+r.mn).join("\n")+"\n\n*Total: "+f(cur,D.total)+"*";
+     if(window.Android&&window.Android.shareText)window.Android.shareText(s);else window.open("https://wa.me/?text="+encodeURIComponent(s))}
+
+    function shareImg(){const D=listData(),a=tab==="a",W=720,H=124+D.rows.length*54,c=document.createElement("canvas");c.width=W;c.height=H;const x=c.getContext("2d");
+     x.fillStyle="#fff";x.fillRect(0,0,W,H);x.fillStyle="#0f766e";x.fillRect(0,0,W,64);x.fillStyle="#fff";x.font="bold 24px sans-serif";x.fillText(D.t,16,40);
+     D.rows.forEach((r,i)=>{const y=64+i*54;if(i%2){x.fillStyle="#f3f6f4";x.fillRect(0,y,W,54)}
+      x.textAlign="left";x.fillStyle="#14231c";x.font="bold 20px sans-serif";x.fillText((i+1)+". "+r.n,16,y+24);
+      x.font="16px sans-serif";x.fillStyle="#66776e";x.fillText(r.mo+" · Month "+r.mn,16,y+46);
+      x.textAlign="right";x.fillStyle="#14231c";x.font="bold 20px sans-serif";x.fillText(r.a,W-16,y+32)});
+     x.textAlign="left";x.font="bold 22px sans-serif";x.fillStyle="#0f766e";x.fillText("Total: "+f(cur,D.total),16,H-24);
+     const d=c.toDataURL("image/png");
+     if(window.Android&&window.Android.shareImage)window.Android.shareImage(d.split(",")[1]);else{const l=document.createElement("a");l.href=d;l.download="tss-list.png";l.click()}}
+
+    function renderNav(){
+      document.getElementById("nav").innerHTML = `
+        <button class="${tab==='m'?'on':''}" onclick="tab='m';renderNav();go()">Monthly Due</button>
+        <button class="${tab==='a'?'on':''}" onclick="tab='a';renderNav();go()">Full List</button>
+      `;
+    }
+
+    function go(keepSearch){
+      document.getElementById("v").innerHTML = all();
+    }
+
+    window.onload = function(){
+      document.getElementById("cur").innerHTML = `<button class="${cur==='AED'?'on':''}" onclick="cur='AED';this.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on'));this.classList.add('on');go()">AED</button><button class="${cur==='INR'?'on':''}" onclick="cur='INR';this.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on'));this.classList.add('on');go()">INR</button>`;
+      document.getElementById("mon").innerHTML = MON.map((m,i)=>`<option value="${i}" ${i===mi?'selected':''}>${m} 2026</option>`).join("");
+      document.getElementById("mon").onchange = function(e){ mi = parseInt(e.target.value); go(); };
+      renderNav();
+      go();
+    };
+  </script>
 </body>
 </html>
